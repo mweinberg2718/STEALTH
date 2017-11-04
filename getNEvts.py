@@ -17,5 +17,8 @@ for inputFile in listOfInputFiles:
     print ("Adding... " + inputFile)
     ggIn.Add(inputFile)
 nEvts = ggIn.GetEntries()
-print(" >> total nEvts:" + str(nEvts))
+
 if (nEvts == 0): sys.exit("No events found!")
+outputFile = open(inputArguments.outputFilePath, 'w')
+outputFile.write("Total nEvts in " + inputArguments.escapedInputFilePattern + ": " + str(nEvts))
+outputFile.close()
