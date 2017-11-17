@@ -7,7 +7,7 @@ import ROOT
 # Register command line options
 parser = argparse.ArgumentParser(description='Run STEALTH selection.')
 parser.add_argument('-s','--sel', default='B', help='Selection scheme: A or B.',type=str)
-parser.add_argument('-e','--era', default='', help='Run Era.',type=str)
+# parser.add_argument('-e','--era', default='', help='Run Era.',type=str)
 parser.add_argument('-H','--ht',  default=60., help='HT cut.',type=float)
 parser.add_argument('-r','--DeltaR',  default=0.4, help='DeltaR(pho,jet) cut.',type=float)
 args = parser.parse_args()
@@ -25,16 +25,28 @@ if args.sel == 'A':
 if args.sel == 'C':
     nPhoCut_ = 0
 HTcut_   = args.ht
-runEra   = args.era
+# runEra   = args.era
 minDeltaRcut_ = args.DeltaR
 nJetsCut_ = 2
 print " >> Running STEALTH 2016 Data Selection:",args.sel
 print " >> HT cut:",HTcut_
-print " >> Era: 2016%s"%runEra
+# print " >> Era: 2016%s"%runEra
 print " >> DeltaR(pho,jt): %.2f"%minDeltaRcut_
 
 ## MAIN ##
 def main():
+    # wrongNPhotonsCounter = 0
+    # HLTJetCounter = 0
+    # wrongNJetsCounter = 0
+    # hTCutCounter = 0
+    # electronVetoCounter = 0
+    # muonVetoCounter = 0
+
+    # jetetaCounter = 0
+    # jetpTCounter = 0
+    # jetPFLooseIDCounter = 0
+    # jetpuIDCounter = 0
+    # jetjetIDCounter = 0
 
     # Keep time
     sw = ROOT.TStopwatch()
@@ -45,20 +57,20 @@ def main():
     nJetsTot = 0
 
     # Load input TTrees into TChain
-    eosDir = "/eos/cms/store/user/mandrews"
-    ggInStr = "%s/DATA/ggSKIMS/DoubleEG_Run2016%s_ReminiAOD_HLTDiPho3018M90_SKIM*.root"%(eosDir,runEra)
+    # eosDir = "/eos/cms/store/user/mandrews"
+    # ggInStr = "%s/DATA/ggSKIMS/DoubleEG_Run2016%s_ReminiAOD_HLTDiPho3018M90_SKIM*.root"%(eosDir,runEra)
     #eosDir = "/eos/uscms/store/user/lpcsusystealth"
     #ggInStr = "%s/DATA/ggSKIMS/JetHT_Run2016%s_ReminiAOD_HLTPFJet450HT900_SKIM*.root"%(eosDir,runEra)
     ggIn = ROOT.TChain("ggNtuplizer/EventTree")
-    ggIn.Add(ggInStr)
+    ggIn.Add("root://cmseos.fnal.gov//store/group/lpcsusystealth/ggNtuple_leppho/FebReminiAOD/skim-DoubleEG_FebReminiAOD.root")
     nEvts = ggIn.GetEntries()
-    print " >> Input file(s):",ggInStr
+    # print " >> Input file(s):",ggInStr
     print " >> nEvts:",nEvts
 
     # Initialize output file as empty clone
     #outFileStr = "%s/DATA/stNTUPLES/DoubleEG_ReminiAOD_Run2016%s_sel%s_HT%d_DeltaR%02d.root"%(eosDir,runEra,args.sel,HTcut_,minDeltaRcut_*10.)
     #outFileStr = "%s/DATA/stNTUPLES/JetHT_ReminiAOD_Run2016%s_sel%s_HT%d_DeltaR%02d.root"%(eosDir,runEra,args.sel,HTcut_,minDeltaRcut_*10.)
-    outFileStr = "test.root"
+    outFileStr = "testOrig.root"
     outFile = ROOT.TFile(outFileStr, "RECREATE")
     outDir = outFile.mkdir("ggNtuplizer")
     outDir.cd()
@@ -75,8 +87,8 @@ def main():
 
     # Event range to process
     iEvtStart = 0
-    iEvtEnd   = nEvts
-    #iEvtEnd   = 10000
+    # iEvtEnd   = nEvts
+    iEvtEnd   = 1000000
     print " >> Processing entries: [",iEvtStart,"->",iEvtEnd,")"
 
     nAcc = 0
@@ -98,9 +110,11 @@ def main():
 
         # Photon selection
         if ggIn.isData and args.sel == 'A' and ggIn.HLTPho>>14&1 == False: # HLT_Diphoton30_18_R9Id_OR_IsoCaloId_AND_HE_R9Id_Mass90
+            print "Fails HLT test"
             continue
         phoIdx  = [] # for DeltaR check: keep a list of photon indices passing photon selection
         nPhotons = 0
+        # nPhotonsLeading = 0
         for i in range(ggIn.nPho):
             if (ggIn.phoEt[0] < PhoEtLead):
                 continue
@@ -112,85 +126,112 @@ def main():
                     ):
                 continue
             nPhotons += 1
+            # if (ggIn.phoEt[i] >= PhoEtLead): nPhotonsLeading += 1
             evtST += ggIn.phoEt[i]
             phoIdx.append(i)
-        if nPhotons != nPhoCut_:
-            continue 
+        # if (nPhotons != nPhoCut_ or nPhotonsLeading < 1):
+        if (nPhotons != nPhoCut_):
+            # wrongNPhotonsCounter += 1
+            continue
+        # if (nPhotonsLeading < 1):
+        #     continue
 
         # Jet selection
         if ggIn.isData and args.sel == 'B' and ggIn.HLTJet>>33&1 == False and ggIn.HLTJet>>18&1 == False: # HLT_PFHT900,PFJet450, resp.
+            # HLTJetCounter += 1
             continue
         nJets = 0
         nJetsDR = 0
         evtHT = 0
-        for i in range(ggIn.nJet):
-            if not (ggIn.jetPt[i] > 30.0
-                    and abs(ggIn.jetEta[i]) < 2.4
-                    and ggIn.jetPFLooseId[i] != False # for some reason == True doesnt work
-                    and ggIn.jetPUID[i] > 0.62 # formerly jetPUidFullDiscriminant
-                    and ggIn.jetID[i] == 6 # loose:2, tight:6
-                    # Deprecated (now in jetID) but here for backward compatibility:
-                    # # Medium or Tight:
-                    # and ggIn.jetCHF[i] > 0.
-                    # and ggIn.jetCEF[i] < 0.99
-                    # and ggIn.jetNCH[i] > 0.
-                    # and ggIn.jetNHF[i] < 0.99
-                    # and ggIn.jetNEF[i] < 0.99
-                    # # Tight only:
-                    # and ggIn.jetNHF[i] < 0.90
-                    # and ggIn.jetNEF[i] < 0.90
-                    ):
-                continue
-            nJets += 1
-            evtHT += ggIn.jetPt[i] # Add jet pT to HT (even though not sure if it's photon)
+        # for i in range(ggIn.nJet):
+        #     # if not (ggIn.jetPt[i] > 30.0
+        #     #         and abs(ggIn.jetEta[i]) < 2.4
+        #     #         and ggIn.jetPFLooseId[i] != False # for some reason == True doesnt work
+        #     #         and ggIn.jetPUID[i] > 0.62 # formerly jetPUidFullDiscriminant
+        #     #         and ggIn.jetID[i] == 6 # loose:2, tight:6
+        #     #         # Deprecated (now in jetID) but here for backward compatibility:
+        #     #         # # Medium or Tight:
+        #     #         # and ggIn.jetCHF[i] > 0.
+        #     #         # and ggIn.jetCEF[i] < 0.99
+        #     #         # and ggIn.jetNCH[i] > 0.
+        #     #         # and ggIn.jetNHF[i] < 0.99
+        #     #         # and ggIn.jetNEF[i] < 0.99
+        #     #         # # Tight only:
+        #     #         # and ggIn.jetNHF[i] < 0.90
+        #     #         # and ggIn.jetNEF[i] < 0.90
+        #     #         ):
+        #     #     continue
+        #     if (abs(ggIn.jetEta[i]) >= 2.4):
+        #         # jetetaCounter += 1
+        #         continue
+        #     if (ggIn.jetPt[i] <= 30.0):
+        #         # jetpTCounter += 1
+        #         continue
+        #     if (ggIn.jetPFLooseId[i] == False):
+        #         # jetPFLooseIDCounter += 1
+        #         continue
+        #     if (ggIn.jetPUID[i] <= 0.62):
+        #         # jetpuIDCounter += 1
+        #         continue
+        #     if (ggIn.jetID[i] != 6):
+        #         # jetjetIDCounter += 1
+        #         continue
+        #     nJets += 1
+        #     evtHT += ggIn.jetPt[i] # Add jet pT to HT (even though not sure if it's photon)
 
-            # DeltaR check: ensure this jet is well-separated from any of the good photons
-            # To avoid double-counting, only add jet pT to ST if we're sure its not a photon 
-            minDeltaRij = 100.
-            for j in phoIdx: # loop over "good" photon indices
-                dR = np.hypot(ggIn.phoEta[j]-ggIn.jetEta[i],ggIn.phoPhi[j]-ggIn.jetPhi[i]) #DeltaR(pho[j],jet[i])
-                if dR < minDeltaRij: 
-                    minDeltaRij = dR
-            if minDeltaRij < minDeltaRcut_:
-                continue
-            nJetsDR += 1 # nJets passing the DeltaR check
-            evtST += ggIn.jetPt[i]
+        #     # DeltaR check: ensure this jet is well-separated from any of the good photons
+        #     # To avoid double-counting, only add jet pT to ST if we're sure its not a photon 
+        #     minDeltaRij = 100.
+        #     for j in phoIdx: # loop over "good" photon indices
+        #         dR = np.hypot(ggIn.phoEta[j]-ggIn.jetEta[i],ggIn.phoPhi[j]-ggIn.jetPhi[i]) #DeltaR(pho[j],jet[i])
+        #         if dR < minDeltaRij: 
+        #             minDeltaRij = dR
+        #     if minDeltaRij < minDeltaRcut_:
+        #         continue
+        #     nJetsDR += 1 # nJets passing the DeltaR check
+        #     evtST += ggIn.jetPt[i]
 
-        if nJetsDR < nJetsCut_ or evtHT < HTcut_: # apply the cut on nJetsDR not nJets
-            continue
-        nJetsTot += nJetsDR
+        # if nJetsDR < nJetsCut_: # apply the cut on nJetsDR not nJets
+        #     # wrongNJetsCounter += 1
+        #     continue
+        # if evtHT < HTcut_:
+        #     # hTCutCounter += 1
+        #     continue
+        # nJetsTot += nJetsDR
 
-        # Electron veto
-        nEle = 0
-        for i in range(ggIn.nEle):
-            if not (ggIn.elePt[i] > 15.0
-                    and ggIn.eleIDbit[i]>>3&1 == True # >>0:veto, >>1:loose, >>2:medium, >>3:tight
-                    and abs(ggIn.eleEta[i]) < 2.5
-                    and abs(ggIn.eleDz[i]) < 0.1
-                    and ggIn.elePFPUIso[i] < 0.1
-                    ):
-                continue
-            nEle += 1
-        if nEle != 0:
-            continue 
+        # # Electron veto
+        # nEle = 0
+        # for i in range(ggIn.nEle):
+        #     if not (ggIn.elePt[i] > 15.0
+        #             and ggIn.eleIDbit[i]>>3&1 == True # >>0:veto, >>1:loose, >>2:medium, >>3:tight
+        #             and abs(ggIn.eleEta[i]) < 2.5
+        #             and abs(ggIn.eleDz[i]) < 0.1
+        #             and ggIn.elePFPUIso[i] < 0.1
+        #             ):
+        #         continue
+        #     nEle += 1
+        # if nEle != 0:
+        #     # electronVetoCounter += 1
+        #     continue
 
-        # Muon veto
-        nMu = 0
-        for i in range(ggIn.nMu):
-            if not (ggIn.muPt[i] > 15.0
-                    and ggIn.muPFPUIso[i] < 0.12
-                    and ggIn.muIDbit[i]>>2&1 == True # >>0:loose, >>1:med, >>2:tight, >>3:soft, >>4:highpT
-                    #and ggIn.muIsTightID[i] == True # deprecated
-                    #and ggIn.muIsLooseID[i] == True # deprecated
-                    ):
-                continue
-            nMu += 1
-        if nMu != 0:
-            continue
+        # # Muon veto
+        # nMu = 0
+        # for i in range(ggIn.nMu):
+        #     if not (ggIn.muPt[i] > 15.0
+        #             and ggIn.muPFPUIso[i] < 0.12
+        #             and ggIn.muIDbit[i]>>2&1 == True # >>0:loose, >>1:med, >>2:tight, >>3:soft, >>4:highpT
+        #             #and ggIn.muIsTightID[i] == True # deprecated
+        #             #and ggIn.muIsLooseID[i] == True # deprecated
+        #             ):
+        #         continue
+        #     nMu += 1
+        # if nMu != 0:
+        #     # muonVetoCounter += 1
+        #     continue
 
-        # MET selection
-        if ggIn.pfMET > 15.:
-            evtST += ggIn.pfMET
+        # # MET selection
+        # if ggIn.pfMET > 15.:
+        #     evtST += ggIn.pfMET
 
         # Write this evt to output tree
         evtST_[0] = evtST
@@ -207,7 +248,17 @@ def main():
     print " >> nJetsTot:",nJetsTot
     print " >> Real time:",sw.RealTime()/60.,"minutes"
     print " >> CPU time: ",sw.CpuTime() /60.,"minutes"
-
+    # print "wrongNPhotonsCounter = ", wrongNPhotonsCounter
+    # print "HLTJetCounter = ", HLTJetCounter
+    # print "wrongNJetsCounter = ", wrongNJetsCounter
+    # print "hTCutCounter = ", hTCutCounter
+    # print "electronVetoCounter = ", electronVetoCounter
+    # print "muonVetoCounter = ", muonVetoCounter
+    # print "jetetaCounter = ", jetetaCounter
+    # print "jetpTCounter = ", jetpTCounter
+    # print "jetPFLooseIDCounter = ", jetPFLooseIDCounter
+    # print "jetpuIDCounter = ", jetpuIDCounter
+    # print "jetjetIDCounter = ", jetjetIDCounter
 
 #_____ Call main() ______#
 if __name__ == '__main__':
